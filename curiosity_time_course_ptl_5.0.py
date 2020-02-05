@@ -164,15 +164,18 @@ def extract_and_transform_subject_data(logfilepath, subj_nr):
 
         ### parse test in round
         test_df = rt.assign_aoi_tags(df, test.start_times[n], test.end_times[n], aoi)
-        # print("test_df with aoi tags:\n", test_df.head())
+        # print("test_df aoi tags:\n", test_df["aoi"].tolist())
 
         # calculate the time course for the test period
-        # could pass n to adjust 'target' to label
-        test_df = test_df.assign(target_look = test_df["aoi"].apply(_calculate_target_look, args=(aoi.inter, aoi.bor), baseline=bl_onint).values)
-        # print("test_df with target looks:\n", test_df.head())
+        target = "int" if n%2 == 0 else "bor"
+        bl = bl_onint if n%2 == 0 else bl_onboring
+        test_df = test_df.assign(target_look = test_df["aoi"].apply(_calculate_target_look, args=(target,), baseline=bl).values)
+        # print(f"calculated target look with target: {target}, and baseline {bl}")
+
         # create list from series, then append recreated series to match indices
         target_looks = pd.Series(data=test_df["target_look"].tolist())
         tls_per_trials[f"trial_{n+1}_tls"].append(pd.Series(target_looks))
+        # print("list of target looks:", test_df["target_look"].tolist())
         # print("\t-> size of test_df.target_look series:", test_df["target_look"].size)
 
     return True
@@ -400,16 +403,19 @@ def _gazepoint_to_aoi(gazepoint, aoi_int, aoi_boring):
         return gazepoint
 
 
-def _calculate_target_look(tag, aoi_int, aoi_boring, baseline=0):
+def _calculate_target_look(tag, target, baseline=0):
     """Returns target  (1 or 0) minus the baseline (if given) for each gazepoint.
-        Target: interesting object
-        but could be: target = label target - then baseline should be from the same
-        also could count 'familiar' looks as 0?
+        Target: labeled object
     """
+    # also could count 'familiar' looks as 0? - no, because of baseline
 
-    if tag.lower() == "int":
+    tags = ["int", "bor"]
+    tags.remove(target)
+    other = tags[0]
+
+    if tag.lower() == target:
         return 1 - baseline
-    elif tag.lower() == "bor":
+    elif tag.lower() == other:
         return 0 - baseline
     else:
         return np.nan
@@ -421,6 +427,7 @@ def _plot_time_course(df, time_frame, df_p=None, trial_nr=None, label=None, nr=0
         trial_nr: the number of the trial (1 or 2)
         label: the label
         nr: number of subjects
+        TARGET LOOK means object targeted by the label
     """
 
     # marker_label1_start = 2110
@@ -435,7 +442,7 @@ def _plot_time_course(df, time_frame, df_p=None, trial_nr=None, label=None, nr=0
     if label==None:
         plt.title(f"Test round {trial_nr} - Baseline corrected target look mean (with SE)\n of N = {nr} subjects")
     else:
-        plt.title(f"Baseline corrected target look mean (with SE)\n for the '{label}' label; N = {nr}")
+        plt.title(f"Baseline corrected mean target look (with SE)\n after '{label}' label; N = {nr}")
     # ci (confidence interval) is set to 68 which will correspond to the standard error if the data is normally distributed, or else to the 68% of confidence interval
     sns.lineplot(x="time", y="target_look", data=df, ci=68, palette=palette, label="proportional target look")
 

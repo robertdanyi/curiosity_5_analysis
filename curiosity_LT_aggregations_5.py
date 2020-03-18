@@ -3,7 +3,7 @@
 # 1. read all sheets, all new label columns -> validate subjects
 # 3. read all sheets, all test columns -> validate trials/subjects
 # 4. collect valid trial numerical data to dictionary (read_excel collects to ordered dictionary subj:df
-# 4. collect valid trial quantitaive data to 2 dataframes: one for each test round
+# 4. collect valid trial quantitative data to 2 dataframes: one for each test round
 # 4. "First gaze after label" is qualitative -> one hot encoding
 # 5. aggregate data
 # 6. write data to file
@@ -27,8 +27,10 @@ excel_file = f"curiosity_looking_data_{given_date}.xlsx"
 input_excel = os.path.join(c.DIR, "tables", f"{given_date}", excel_file)
 date = str(datetime.datetime.today().date())
 dir_name = os.path.join(c.DIR, "tables", date)
-try: os.mkdir(dir_name)
-except FileExistsError: pass
+try: 
+    os.mkdir(dir_name)
+except FileExistsError: 
+    pass
 output_excel = os.path.join(dir_name, "curiosity_LT_aggregated_{0}.xlsx".format(date))
 #writer = pd.ExcelWriter(output_excel)
 
@@ -58,20 +60,20 @@ def main():
             df_int.loc[key,col] = df.loc[0,col]
             df_bor.loc[key,col] = df.loc[1,col]
 
-    df_latency = pd.concat([df_int, df_bor], ignore_index=True)
+    # df_latency = pd.concat([df_int, df_bor], ignore_index=True)
 
-    mean_first_latency = get_mean_latency(df_latency)
-    print("mean latency at first gaze after ATT look:", mean_first_latency)
+    # mean_first_latency = get_mean_latency(df_latency)
+    # print("mean latency at first gaze after ATT look:", mean_first_latency)
 
-    df_int = df_int.assign(First_gaze_on_interesting=df_int.apply(_fgaze_validate_onehot, target=1, axis=1))
-    df_int = df_int.assign(First_gaze_on_other=df_int.apply(_fgaze_validate_onehot, target=2, axis=1))
-    df_bor = df_bor.assign(First_gaze_on_interesting=df_bor.apply(_fgaze_validate_onehot, target=1, axis=1))
-    df_bor = df_bor.assign(First_gaze_on_other=df_bor.apply(_fgaze_validate_onehot, target=2, axis=1))
+    # df_int = df_int.assign(First_gaze_on_interesting=df_int.apply(_fgaze_validate_onehot, target=1, axis=1))
+    # df_int = df_int.assign(First_gaze_on_other=df_int.apply(_fgaze_validate_onehot, target=2, axis=1))
+    # df_bor = df_bor.assign(First_gaze_on_interesting=df_bor.apply(_fgaze_validate_onehot, target=1, axis=1))
+    # df_bor = df_bor.assign(First_gaze_on_other=df_bor.apply(_fgaze_validate_onehot, target=2, axis=1))
 
-    df_int = df_int.assign(Second_gaze_on_interesting=df_int.apply(_secgaze_validate_onehot, target=1, axis=1))
-    df_int = df_int.assign(Second_gaze_on_other=df_int.apply(_secgaze_validate_onehot, target=2, axis=1))
-    df_bor = df_bor.assign(Second_gaze_on_interesting=df_bor.apply(_secgaze_validate_onehot, target=1, axis=1))
-    df_bor = df_bor.assign(Second_gaze_on_other=df_bor.apply(_secgaze_validate_onehot, target=2, axis=1))
+    # df_int = df_int.assign(Second_gaze_on_interesting=df_int.apply(_secgaze_validate_onehot, target=1, axis=1))
+    # df_int = df_int.assign(Second_gaze_on_other=df_int.apply(_secgaze_validate_onehot, target=2, axis=1))
+    # df_bor = df_bor.assign(Second_gaze_on_interesting=df_bor.apply(_secgaze_validate_onehot, target=1, axis=1))
+    # df_bor = df_bor.assign(Second_gaze_on_other=df_bor.apply(_secgaze_validate_onehot, target=2, axis=1))
 
     # set types in case of mismatch
     type_d = {col:"float" for col in c.aggr_columns}
@@ -157,16 +159,16 @@ def _fgaze_validate_onehot(row, target=None):
 
     latency = row["1st_gaze_latency"]
 
-    if (row["Look_before_end_of_label"] not in [target_aoi, "ATT"]) and (latency > 2000):
-        return np.nan
+    # if (row["Look_before_end_of_label"] not in [target_aoi, "ATT"]) and (latency > 2000):
+    #     return np.nan
 
+    # else:
+    if row["1st_gaze"] == target:
+        return 1
+    elif not row["1st_gaze"]:
+        return np.nan
     else:
-        if row["1st_gaze_after_label"] == target:
-            return 1
-        elif not row["1st_gaze_after_label"]:
-            return np.nan
-        else:
-            return 0
+        return 0
 
 
 def _secgaze_validate_onehot(row, target=None):
@@ -197,9 +199,6 @@ def get_mean_latency(df):
     mean_latency = latency_series.mean()
 
     return mean_latency
-
-
-
 
 
 def print_dataframe(df, filename, sheetname):

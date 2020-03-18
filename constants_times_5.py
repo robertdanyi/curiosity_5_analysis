@@ -30,6 +30,9 @@ events:
 
 import os
 
+# sample time: 1000ms/60
+freq = 60 # monitor refreshment rate (Hz / fps)
+ST = 1000/freq # 16.66667 ms
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -90,56 +93,66 @@ teach_validation_columns = ["New_objs_LT-screen",
                  "New_labeling_LT-screen"]
 test_validation_columns = ["Baseline_LT-screen",
                 "Test_LT-screen",
-                "Gaze_on_AG"]
+                "Gazed_at_AG?"]
 
-columns = ["Test label",
-          "Baseline_LT-screen",
-          "Test_LT-screen",
-          "Baseline_LT-interesting",
-          "Baseline_LT-other",
-          "Gaze_on_AG",
-          "Look_before_end_of_label",
-          "Test_LT_interesting",
-          "Test_LT_other",
-          "Test_LT_familiars",
-          "Test_LT-interesting_BL-corr.",
-          "Test_LT_other_BL-corr.",
-          "1st_gaze_after_label",
-          "1st_gaze_latency",
-          "1st_gaze_duration",
-          "2nd_gaze_after_label",
-          "2nd_gaze_latency",
-          "2nd_gaze_duration"
+columns = [
+            "Test label",
+            "Baseline_LT-screen",
+            "Test_LT-screen",
+            "Baseline_INT",
+            "Baseline_BOR",
+            "Gazed_at_AG?",
+            # "Look_before_end_of_label",
+            "Test_INT",
+            "Test_BOR",
+            "Test_FAMS",
+            "Test_INT_bl-corr",
+            "Test_BOR_bl-corr",
+            "Test_FAMS_bl-corr"
+            "1st_gaze",
+            "1st_gaze_latency",
+            "1st_gaze_duration"
+            # "2nd_gaze_after_label",
+            # "2nd_gaze_latency",
+            # "2nd_gaze_duration"
           ]
 
-quant_columns = ["Baseline_LT-interesting",
-                 "Baseline_LT-other",
-                "Test_LT-interesting_BL-corr.",
-                "Test_LT_other_BL-corr.",
-                "Test_LT_interesting",
-                "Test_LT_other",
-                "Test_LT_familiars",
-                "Look_before_end_of_label",
-                "1st_gaze_after_label",
-                "1st_gaze_latency",
-                "1st_gaze_duration",
-                "2nd_gaze_after_label",
-                "2nd_gaze_latency",
-                "2nd_gaze_duration"
+quant_columns = [
+                "Baseline_INT",
+                "Baseline_BOR",
+                "Baseline_FAMS",
+                "Test_INT_bl-corr",
+                "Test_BOR_bl-corr",
+                "Test_FAMS_bl-corr",
+                "Test_INT",
+                "Test_BOR",
+                "Test_FAMS",
+                # "Gaze during label",
+                # "Look_before_end_of_label",
+                # "1st_gaze",
+                # "1st_gaze_latency",
+                # "1st_gaze_duration"
+                # "2nd_gaze_after_label",
+                # "2nd_gaze_latency",
+                # "2nd_gaze_duration"
                 ]
 
+#gaze_columns = [
+#                "First_gaze object"
+#                ]
+
 aggr_columns = [
-                "Test_LT_interesting",
-                "Test_LT_other",
-                "Test_LT_familiars",
-                "Baseline_LT-interesting",
-                "Baseline_LT-other",
-                "Test_LT-interesting_BL-corr.",
-                "Test_LT_other_BL-corr.",
-                "First_gaze_on_interesting",
-                "First_gaze_on_other",
-                "Second_gaze_on_interesting",
-                "Second_gaze_on_other"]
+                "Test_INT",
+                "Test_BOR",
+                "Test_FAMS",
+                "Baseline_INT",
+                "Baseline_BOR",
+                "Baseline_FAMS",
+                "Test_INT_bl-corr",
+                "Test_BOR_bl-corr",
+                "Test_FAMS_bl-corr"
+#                "First gaze on target"
+                ]
 
 
 class Fam_data:
@@ -168,7 +181,7 @@ class Teaching_data:
         self.label_end_times = df[df["Event"]==TEACH_LBL_END]["TimeStamp"].tolist()
 
 
-class Test_data:
+class Test_controll_data:
 
     def __init__(self, df):
         """
@@ -179,30 +192,44 @@ class Test_data:
         self.end_events = [e for e in self.events if e.endswith("ENDS")]
         self.bl_start_times = df[df["Event"]==BASELINE_EVENT]["TimeStamp"].tolist()
         self.ag_start_times = df[df["Event"]==ATT_GETT_START]["TimeStamp"].tolist()
-#        self.start_times = df[(df["Event"].str.startswith("test__", na=False)
-#                            & df["Event"].str.endswith("STARTS", na=False))]["TimeStamp"].tolist()
         self.start_times = df[df["Event"].isin(self.start_events)]["TimeStamp"].tolist()
-#        self.end_times = df[(df["Event"].str.startswith("test__", na=False)
-#                            & df["Event"].str.endswith("ENDS", na=False))]["TimeStamp"].tolist()
         self.end_times = df[df["Event"].isin(self.end_events)]["TimeStamp"].tolist()
 
 
-class Test_results:
-
-    def __init__(self, subj_nr):
-        self.subj_nr = subj_nr
-        self.ag_looks = []
-        self.all_test_onint_bl_corr = []
-        self.all_test_onboring_bl_corr = []
-        self.all_test_onint = []
-        self.all_test_onboring = []
-        self.all_test_onfam = []
-        self.preceding_looks = []
-        self.first_gazes = []
-        self.first_gaze_latencies = []
-        self.first_gaze_durations = []
-        self.second_gazes = []
-        self.second_gaze_latencies = []
-        self.second_gaze_durations = []
+#class Test_LT:
+#
+#    def __init__(self, subj_nr):
+#        self.subj_nr = subj_nr
+#        self.ag_looks = []
+#        self.all_test_onint_bl_corr = []
+#        self.all_test_onboring_bl_corr = []
+#        self.all_test_onfam_bl_corr = []
+#        self.all_test_onint = []
+#        self.all_test_onboring = []
+#        self.all_test_onfam = []
+        # self.preceding_looks = []
+#        self.initial_gazes = ["None", "None"]
+#        self.initial_gaze_latencies = ["None", "None"]
+#        self.initial_gaze_durations = ["None", "None"]
+#        self.first_gazes = []
+#        self.first_gaze_latencies = []
+#        self.first_gaze_durations = []
+        # self.second_gazes = []
+        # self.second_gaze_latencies = []
+        # self.second_gaze_durations = []
+        
+        
+#class Test_Gaze:
+#    
+#    def __init__(self, subj_nr, gaze_coll):
+#        self.subj_nr = subj_nr
+#        self.first_gaze = []
+#        self.first_gaze_latency = []
+#        self.first_gaze_duration = []
+#        self.second_gaze = []
+#        self.second_gaze_latency = []
+#        self.second_gaze_duration = []
+        
+        
 
 

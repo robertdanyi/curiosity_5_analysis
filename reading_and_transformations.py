@@ -18,7 +18,7 @@ def read_tsv_file(logfilepath):
 
 
     df = (
-        pd.read_csv(logfilepath, sep="\t", usecols=usecols)
+        pd.read_csv(logfilepath, sep="\t", usecols=usecols, engine="python")
         .pipe(check_df_format)
           )
 
@@ -31,16 +31,6 @@ def read_tsv_file(logfilepath):
 
     # print("read dataframe head:\n", df.head())
     return df
-
-
-# def create_gazepoints(df):
-#     print("df head of stuff:\n", df.head())
-
-#     gazepoints = []
-#     for i in df.index:
-#         gazepoints.append(df.at[i, "GazePointX"], df.at[i,"GazePointY"])
-
-#     return gazepoints
 
 
 def check_df_format(df):
@@ -123,6 +113,14 @@ def interpolate_missing_samples(df, freq=60, max_gap_length=101):
     return df
 
 
+def interpolate_gap_samples(df, freq=60, max_gap_length=101):
+    """
+    define a function for interpolating small periods that cut up fixations.
+    e.g. "FAM...", "OUT, OUT", "FAM..."
+    """
+    return df
+
+
 def _calculate_fill_values(prec_sample, foll_sample, counter):
     """
     Calculates the values to fill a gap with in interpolation.
@@ -142,15 +140,12 @@ def _calculate_fill_values(prec_sample, foll_sample, counter):
     return fill_values
 
 
-def assign_aoi_tags(df, start_time, end_time, aoi, aoi_ag=None):
+def assign_aoi_tags(df, aoi, aoi_ag=None):
     """
-    Cuts the input dataframe to size with the specified starting and ending timepoints.
     Adds "aoi" column containing an aoi tag for each gazepoint.
+
     aoi: collections.namedtuple
     """
-
-    df = df[(df["TimeStamp"] > start_time) & (df["TimeStamp"] < end_time)]
-
     # add "aoi" columns with aoi tags
     df = df.assign(aoi = df["gazepoints"].apply(gazepoint_to_aoi,
                    args=(aoi,), aoi_ag=aoi_ag).values)

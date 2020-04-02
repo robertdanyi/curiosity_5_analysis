@@ -38,6 +38,17 @@ Data processing structure:
             - calculate gaze structure
             - collect gaze data from gaze structure (gaze.sort_gaze)
             - collect time course data (baselines and AOI tags from gaze period)
+   
+###############################################################################         
+Change logs:
+------------
+2020.02.24
+- only apple and banana (from 02.24)
+- slightly changed loglines (see constants)
+
+2020.02.26
+3 rounds of familiarisation instead of 4
+1s blank before each test trial (instead of .5)
 """
 
 import datetime
@@ -46,10 +57,11 @@ import logging
 import collections
 import pandas as pd
 import pickle
+import swifter
 import constants as c
 import reading_and_transformations as rt
 import gaze_calculations as calc
-import looking_time_aggregations_5 as aggr
+import looking_time_aggregations as aggr
 import time_course_plotting as time_course
 
 pd.options.mode.chained_assignment = None
@@ -57,7 +69,7 @@ pd.options.mode.chained_assignment = None
 
 ####################
 test = False
-save_to_file = False
+save_to_file = True
 do_aggregation = False
 analyse_tc = False
 save_tc_pickle = False
@@ -98,7 +110,13 @@ def main():
     logfiles = [f for f in sorted(os.listdir(logfilespath)) if os.path.isfile(os.path.join(logfilespath, f))]
     
     for log in logfiles:
-        print(f"\nReading file '{log}'.")
+        print(f"\nReading file {log}")
+        
+        # check date of logfile
+        datestring = log.split("_")[3]
+        logdate = datetime.datetime.strptime(datestring, "%Y-%m-%d")
+        feb24 = datetime.datetime(2020, 2, 24)
+        oldlog = logdate < feb24
 
         logfilepath = os.path.join(logfilespath, log)
 
@@ -117,10 +135,15 @@ def main():
             break
 
         df = rt.interpolate_missing_samples(df)
+        
+        # objects holding logged times and events
+        fam = c.Fam_data(df_events)
+        teaching = c.Teaching_data(df_events, oldlog)
+        test = c.Test_controll_data(df_events, oldlog)
 
-        valid1 = parse_introduction_data(df, df_events, subj_nr)
-        valid2 = parse_familiarisation_data(df, df_events, subj_nr)
-        test_results_df, gaze_results_df, time_course_d = parse_test_data(df, df_events, subj_nr)
+        valid1 = parse_introduction_data(df, fam, subj_nr)
+        valid2 = parse_familiarisation_data(df, teaching, subj_nr)
+        test_results_df, gaze_results_df, time_course_d = parse_test_data(df, test, subj_nr)
         
         if valid1 and valid2:
             
@@ -152,9 +175,8 @@ def main():
     
     
 
-def parse_introduction_data(df, df_events, subj_nr):
+def parse_introduction_data(df, fam, subj_nr):
 
-    fam = c.Fam_data(df_events)
     fam_onscreen = _calculate_onscreen_look(df, fam.start_times, fam.end_times)
     fam_label_onscreen = _calculate_onscreen_look(df, fam.label_start_times, fam.label_end_times)
 
@@ -173,16 +195,14 @@ def parse_introduction_data(df, df_events, subj_nr):
     return True
 
 
-def parse_familiarisation_data(df, df_events, subj_nr):
+def parse_familiarisation_data(df, teaching, subj_nr):
 
-    teaching = c.Teaching_data(df_events)
     start_times, end_times = teaching.start_times, teaching.end_times
     
     teaching_demo_onscreen = _calculate_onscreen_look(df, start_times, end_times)
     teaching_label_onscreen = _calculate_onscreen_look(df, teaching.label_start_times, teaching.label_end_times)
 
-    events = df_events["Event"].tolist() # event e.g. "Familiarisation_anim1_left2"
-    teaching_interesting_sides = [e.split("_")[-1][:-1] for e in events if (e.startswith("Familiarisation_anim"))]
+    teaching_interesting_sides = teaching.interesting_sides
     logging.info("Subject: {0} \nFamiliarisation interesting sides: {1}".format(subj_nr, teaching_interesting_sides))
 
     teaching_onint = [] # needed to see if int is really interesting
@@ -243,7 +263,7 @@ def check_att_getter_gaze(df, test, n, aoi):
     return gazed_at_ag
 
 
-def parse_test_data(df, df_events, subj_nr):
+def parse_test_data(df, test, subj_nr):
     """
     returns:
         test_results_df from test_dict:
@@ -265,12 +285,9 @@ def parse_test_data(df, df_events, subj_nr):
     
     time_course_d = {}
 
-    test = c.Test_controll_data(df_events)
-    start_events = test.start_events
     start_times, end_times = test.start_times, test.end_times
+    test_interesting_sides = test.interesting_sides
 
-    # test__int_label_bottom_right_tacok_STARTS
-    test_interesting_sides = ["-".join(e.split("_")[-4:-2]) for e in start_events]
     logging.info("Subject: {0} \nTest interesting sides: {1}".format(subj_nr, test_interesting_sides))
 
     # ALERT if tests not completed
@@ -281,7 +298,7 @@ def parse_test_data(df, df_events, subj_nr):
     test_onscreen = _calculate_onscreen_look(df, start_times, end_times)
     
     
-    for n in range(len(end_times)):
+    for n in range(len(end_times)): # n: trial nr
         
         # trial validity
         valid = True
@@ -381,7 +398,7 @@ def _calculate_onscreen_look(dataframe, start_times, end_times):
 
     for n in range(len(start_times)):
         df = dataframe[(dataframe["TimeStamp"] >= start_times[n]) & (dataframe["TimeStamp"]< end_times[n])]
-        valid_times = df["gazepoints"].apply(lambda x : x != "invalid").sum()
+        valid_times = df["gazepoints"].swifter.progress_bar(False).apply(lambda x : x != "invalid").sum()
         onscreen_looks.append(valid_times / df["gazepoints"].size)
 
     return onscreen_looks
@@ -411,18 +428,19 @@ def write_results_to_file(df, subj_nr, index=False, startrow=15):
     """
     Writes input df to file excel file.
     """
+    
+    def round_numbers(x):
+
+        if isinstance(x, (float, complex)):
+            return round(float(x),3)
+        else:
+            return x
+    
     # rounding
     df = df.applymap(round_numbers)
     df.to_excel(writer, sheet_name=subj_nr, index=index, startrow=startrow)
 
 
-def round_numbers(x):
-
-    if isinstance(x, (float, complex)):
-        return round(float(x),3)
-    else:
-        return x
-    
     
 ## for testing
 def print_dataframes(df, subj_nr, filename):

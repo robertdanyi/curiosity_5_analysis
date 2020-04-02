@@ -26,18 +26,20 @@ import numpy as np
 import os
 import datetime
 import pickle
+import swifter
 
 from constants import DIR, ST
 import plot_plotly as plot
-#import t_tests
 
 
 date = str(datetime.datetime.today().date())
-#output folders
-plots_dir = os.path.join(DIR, "time_course", "plots", f"{date}")
-tables_dir_name = os.path.join(DIR, "time_course", "tables", f"{date}")
+
+#input
 pickle_jar = os.path.join(DIR, "time_course", "pickle")
 
+#output
+plots_dir = os.path.join(DIR, "time_course", "plots", f"{date}")
+tables_dir_name = os.path.join(DIR, "time_course", "tables", f"{date}")
 excelfile = os.path.join(tables_dir_name, f"target_look_dataframes_per_label_{date}.xlsx")
 writer = pd.ExcelWriter(excelfile)
 
@@ -69,12 +71,12 @@ def analyse_time_course(tc_dict):
     
     _create_paths([plots_dir, tables_dir_name])
     
-    do_target_look_calculations(tc_dict, fam=False)
+    _do_target_look_calculations(tc_dict, fam=False)
     
-    do_target_look_calculations(tc_dict, fam=True)
+    _do_target_look_calculations(tc_dict, fam=True)
     
     
-def do_target_look_calculations(tc_dict, fam):
+def _do_target_look_calculations(tc_dict, fam):
     
     tls_per_trials = {nr: [] for nr in [0,1]}
     
@@ -83,8 +85,6 @@ def do_target_look_calculations(tc_dict, fam):
         subj_data = {} # collect subject data
         
         for trial_nr, d in subj_dict.items(): # d = tc_dict[subj][trial_nr]
-            
-#            d = subj_dict[trial_nr]
             
             trial_nr = int(trial_nr)
             
@@ -102,7 +102,7 @@ def do_target_look_calculations(tc_dict, fam):
                 test_data_series = pd.Series(d["AOI"])
                 
                 target_look = (test_data_series
-                                    .apply(_calculate_target_look, 
+                                    .swifter.progress_bar(False).apply(_calculate_target_look, 
                                            target=target, 
                                            dist=distractor, 
                                            bl_target=bl_target)
@@ -112,7 +112,7 @@ def do_target_look_calculations(tc_dict, fam):
             
         # reduce trials to two by averaging related trials
         if len(list(subj_data.keys())) > 2:
-            subj_data = average_paired_trials(subj_data)
+            subj_data = _average_paired_trials(subj_data)
         
         for n in subj_data.keys():
             tls_per_trials[n].append(subj_data[n]) # append series
@@ -147,7 +147,7 @@ def _calculate_target_look(tag, target, dist, bl_target=0):
         return np.nan
     
     
-def average_paired_trials(subj_trials):
+def _average_paired_trials(subj_trials):
     """
     Averages trial paires for subject (if nr of trials > 2),
     assuming even indexes are familiar label trials, odds are novel label trials 
@@ -188,10 +188,13 @@ def _prep_data_for_plotting(tls_per_trials, fam):
         # add useful columns
         data_cols = df_tls.columns
         df_tls = (df_tls
-                .assign(SE = df_tls.apply(_calculate_standard_error, axis=1))
+                .assign(SE = df_tls
+                        .swifter.progress_bar(False).apply(_calculate_standard_error, axis=1))
                 .assign(time = list(df_tls.index * ST))
-                .assign(sample_mean = df_tls.loc[:, data_cols].mean(axis=1))
-                .assign(nr_of_datapoints = df_tls.loc[:, data_cols].apply(lambda x: x.notna().sum(), axis=1))
+                .assign(sample_mean = df_tls.loc[:, data_cols]
+                        .mean(axis=1))
+                .assign(nr_of_datapoints = df_tls.loc[:, data_cols]
+                        .swifter.progress_bar(False).apply(lambda x: x.notna().sum(), axis=1))
                 )
         
         obj = "FAMILIAR" if fam else "TARGET"
@@ -201,9 +204,9 @@ def _prep_data_for_plotting(tls_per_trials, fam):
         
         df_tls.to_excel(excelfilename, sheet_name=label, index=False)
         
-#        _plot._plot_plotly1(df_tls, label=label, obj=obj, n=nr_of_subjects)
+#        plot.plot_plotly1(df_tls, label=label, obj=obj, n=nr_of_subjects)
         
-        plot._plot_plotly2(df_tls, label=label, obj=obj, n=nr_of_subjects)
+        plot.plot_plotly2(df_tls, label=label, obj=obj, n=nr_of_subjects)
 
 
 def _calculate_standard_error(sample):
@@ -211,10 +214,31 @@ def _calculate_standard_error(sample):
     a sample: series of data of all subjects at the timepoint
     """
     n = sample.size
+    
+#    if n < 2:
+#        return np.nan
+    
     std = sample.std(ddof=1)
     se = std / np.sqrt(n)
     
     return se
+
+
+# unused
+def _calculate_mean_target_look(sample):
+    """
+    a sample: series of data of all subjects at the timepoint
+    calculates mean of sample target looks at the timepoint;
+    returns: 
+        nan if sample size = 1
+        sample mean
+    """
+    
+    if sample.size < 2:
+        return np.nan
+    
+    else:
+        return sample.mean()
 
 
 def _create_paths(paths):

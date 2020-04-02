@@ -26,6 +26,15 @@ events:
     test__int_label_[bottom-right]_[tacok]_STARTS / test__other_label_[top-left]_[bitye]_STARTS
     test__int_label_ENDS / test__other_label_ENDS
     Experiment_ended
+    
+Change logs
+From 2020-02-24: 
+    - Corrected order in familiarisation: 
+        "intro_with_face_start" comes BEFORE "Familiarisation_anim.."
+    - New logline for test start:
+        "test__intLabel:[bitye/tacok]:[bottom-right/..]_[banana/apple]:[top_right/..]_STARTS
+    - Small change in logline for test end:
+        "test__intLabel_ENDS / test__otherLabel_ENDS"
 """
 
 import os
@@ -62,6 +71,9 @@ AOI_dict = {"top-left":[AOI_top_left,AOI_bottom_right,AOI_bottom_left,AOI_top_ri
             "bottom-left":[AOI_bottom_left,AOI_top_right,AOI_top_left,AOI_bottom_right],
             "top-right":[AOI_top_right,AOI_bottom_left,AOI_bottom_right,AOI_top_left],
             "bottom-right":[AOI_bottom_right,AOI_top_left,AOI_top_right,AOI_bottom_left]}
+
+second_int_side_dict = {"top-left":"bottom-right", "bottom-left":"top-right", "bottom-right":"top-left", "top-right":"bottom-left"}
+int_side_pairs = [["top-left", "bottom-right"], ["bottom-left", "top-right"]]
 
 # to get aois for the familiar objects as well.
 DIAG1 = (AOI_top_left,AOI_bottom_right)
@@ -118,21 +130,37 @@ class Fam_data:
 
 class Teaching_data:
 
-    def __init__(self, df):
+    def __init__(self, df, oldlog):
         """
         df: dataframe containing the events
-        s_times: list of logged start times; real start times are 3s later due to logging before "intro_with_face_start"
+        oldlog: Boolean to check if older version of log (before 2020-02-24)
+            start times are 3s later due to incorrect logging before "intro_with_face_start"
+        ---------
+        s_times: list of the logged familiarisation start times; 
+        "teaching" = "familiarisation"
         """
-        s_times = df[df["Event"].str.startswith("Familiarisation_anim", na=False)]["TimeStamp"].tolist()
-        self.start_times = [x+3000 for x in s_times]
+        
+        teaching_events_df = df[df["Event"].str.startswith("Familiarisation_anim", na=False)]
+        s_times = teaching_events_df["TimeStamp"].tolist()
+        
+        self.start_times = self._get_start_times(s_times, oldlog)
         self.end_times = [t+anim_dur for t in self.start_times]
         self.label_start_times = df[df["Event"]==TEACH_LBL_START]["TimeStamp"].tolist()
         self.label_end_times = df[df["Event"]==TEACH_LBL_END]["TimeStamp"].tolist()
+        self.interesting_sides = [e.split("_")[-1][:-1] for e in teaching_events_df["Event"].tolist()]
+        
+    
+    def _get_start_times(self, s_times, oldlog):
+        
+        if oldlog:
+            return s_times
+        else:
+            return [x+3000 for x in s_times]
 
 
 class Test_controll_data:
 
-    def __init__(self, df):
+    def __init__(self, df, oldlog):
         """
         df: dataframe containing the events
         """
@@ -143,6 +171,21 @@ class Test_controll_data:
         self.ag_start_times = df[df["Event"]==ATT_GETT_START]["TimeStamp"].tolist()
         self.start_times = df[df["Event"].isin(self.start_events)]["TimeStamp"].tolist()
         self.end_times = df[df["Event"].isin(self.end_events)]["TimeStamp"].tolist()
+        self.interesting_sides = self._get_interesting_sides(oldlog)
+        
+        
+    def _get_interesting_sides(self, oldlog):
+        
+        if oldlog: # in logfiles before 02-24
+            # test__int_label_bottom_right_tacok_STARTS
+            return ["-".join(e.split("_")[-4:-2]) for e in self.start_events]
+        
+        else:  
+            # test__otherLabel:tacok:bottom-right_banana:top-right_STARTS
+            first_int_side = self.start_events[0].split(":")[2].split("_")[0]
+            second_int_side = second_int_side_dict[first_int_side]
+            
+            return [first_int_side, second_int_side]
 
 
 

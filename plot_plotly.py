@@ -24,7 +24,7 @@ except FileExistsError:
 
 
 # plot one plot
-def _plot_plotly1(df, label, obj, n):
+def plot_plotly1(df, label, obj, n):
     
     fig = make_subplots(
     rows=2, cols=1,
@@ -141,7 +141,7 @@ def _plot_plotly1(df, label, obj, n):
 
 
 # plot two subplots
-def _plot_plotly2(df, label, obj, n):
+def plot_plotly2(df, label, obj, n):
     """
     plot 2 suplots:
         upper: valid datapoints (subjects) along the timeline
@@ -156,6 +156,7 @@ def _plot_plotly2(df, label, obj, n):
     specs=[[{"type": "scatter"}],
            [{"type": "scatter"}]])
     
+    ## SUBPLOTS
     # upper subplot
     datapoints = go.Scatter(
             name="",
@@ -204,7 +205,7 @@ def _plot_plotly2(df, label, obj, n):
     fig.append_trace(proportion, 2,1)
     fig.append_trace(upper_bound,2,1)
     
-    # layout
+    ## LAYOUT
     end_time = df["time"].iloc[-1]
     
     # define shapes
@@ -230,7 +231,7 @@ def _plot_plotly2(df, label, obj, n):
     
 #    fig['layout'].update(shapes=shapes)
     
-    # AXES
+    ## AXES
     
     # x axes for upper subplot
     
@@ -254,7 +255,12 @@ def _plot_plotly2(df, label, obj, n):
                      row=2, col=1)
     
     # save and show plots
-    pic = os.path.join(plots_dir, f"{obj}_object_look_{label}_label_trials_timecourse_.html")
+    if obj=="TARGET":
+        pic_title = f"timecourse_TARGET_vs_distractor_look_in_{label}_trials_{n}_subjects.html"
+    else:
+        pic_title = f"timecourse_Familiar_vs_distractor_look_in_{label}_trials_{n}_subjects.html"
+        
+    pic = os.path.join(plots_dir, pic_title)
     fig.write_html(file=pic)
     print("plotted")
     fig.show()

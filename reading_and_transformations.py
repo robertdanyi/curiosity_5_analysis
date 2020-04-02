@@ -6,6 +6,7 @@ Reading, recoding, tagging, interpolating Tobii T60XL eye tracker data
 import pandas as pd
 import numpy as np
 import math
+import swifter
 
 
 def read_tsv_file(logfilepath):
@@ -14,35 +15,31 @@ def read_tsv_file(logfilepath):
     Drops unneded columns.
     Returns dataframe.
     """
+    
+    def check_df_format(df):
+
+        cols = ["TimeStamp","GazePointX", "GazePointY"]
+        for c in cols:
+            if df[c].dtype != float:
+                print(f"WARNING! Experiment data has an invalid column: {c}!")
+                return None
+        return df
+    
     usecols=["TimeStamp", "Event", "GazePointX", "GazePointY"]
-
-
     df = (
         pd.read_csv(logfilepath, sep="\t", usecols=usecols, engine="python")
         .pipe(check_df_format)
           )
-
-    df = (df
-        # .pipe(check_df_format)
-        .assign(gazepoints=([(x,y) if (x,y) != (-1,-1) else "invalid"
-                                          for x,y in zip(df["GazePointX"], df["GazePointY"])]))
-        .drop(labels=["GazePointX", "GazePointY"], axis=1)
-        )
-
-    # print("read dataframe head:\n", df.head())
-    return df
-
-
-def check_df_format(df):
-
-    cols = ["TimeStamp","GazePointX", "GazePointY"]
-    for c in cols:
-        if df[c].dtype != float:
-            print(f"WARNING! Experiment data has an invalid column: {c}!")
-            return None
+    df["gazepoints"] = [(x,y) if (x,y) != (-1,-1) else "invalid"
+                                          for x,y in zip(df["GazePointX"], df["GazePointY"])]
+    df.drop(labels=["GazePointX", "GazePointY"], axis=1, inplace=True)
+#    df = (df
+#        .assign(gazepoints=([(x,y) if (x,y) != (-1,-1) else "invalid"
+#                                          for x,y in zip(df["GazePointX"], df["GazePointY"])]))
+#        .drop(labels=["GazePointX", "GazePointY"], axis=1)
+#        )
 
     return df
-
 
 
 def detach_events(df):
@@ -113,14 +110,6 @@ def interpolate_missing_samples(df, freq=60, max_gap_length=101):
     return df
 
 
-def interpolate_gap_samples(df, freq=60, max_gap_length=101):
-    """
-    define a function for interpolating small periods that cut up fixations.
-    e.g. "FAM...", "OUT, OUT", "FAM..."
-    """
-    return df
-
-
 def _calculate_fill_values(prec_sample, foll_sample, counter):
     """
     Calculates the values to fill a gap with in interpolation.
@@ -143,53 +132,61 @@ def _calculate_fill_values(prec_sample, foll_sample, counter):
 def assign_aoi_tags(df, aoi, aoi_ag=None):
     """
     Adds "aoi" column containing an aoi tag for each gazepoint.
-
+    ----------
     aoi: collections.namedtuple
     """
+    
+    def gazepoint_to_aoi(gazepoint, aoi, aoi_ag=None):
+        """ Checks if the gazepoint is within an AOI and returns the aoi label or the gazepoint."""
+
+        def contains(gazepoint, AOI):
+            """ Checks if a pair of coordinates is within an AOI. """
+            
+            if gazepoint == "invalid":
+                return False
+        
+            gpx, gpy = gazepoint[0], gazepoint[1]
+            aoix, aoiy = AOI[0][0], AOI[0][1]
+            width, height = AOI[1], AOI[2]
+        
+            if ((aoix - width/2) <= gpx <= (aoix + width/2) and (aoiy - height/2) <= gpy <= (aoiy + height/2)):
+                return True
+            else:
+                return False
+    
+    
+        if contains(gazepoint, aoi.inter):
+            return "INT"
+        elif contains(gazepoint, aoi.bor):
+            return "BOR"
+        elif aoi_ag and contains(gazepoint, aoi_ag):
+            return "ATT"
+        elif aoi.fam1 and contains(gazepoint, aoi.fam1):
+            return "FAM"
+        elif aoi.fam2 and contains(gazepoint, aoi.fam2):
+            return "FAM"
+        else:
+            return "OUT"
+    
+    
     # add "aoi" columns with aoi tags
-    df = df.assign(aoi = df["gazepoints"].apply(gazepoint_to_aoi,
-                   args=(aoi,), aoi_ag=aoi_ag).values)
+    df = df.assign(aoi = df["gazepoints"]
+            .swifter.progress_bar(False).apply(gazepoint_to_aoi, args=(aoi,), aoi_ag=aoi_ag).values)
 
     return df
 
 
-def gazepoint_to_aoi(gazepoint, aoi, aoi_ag=None):
-    """ Checks if the gazepoint is within an AOI and returns the aoi label or the gazepoint."""
-
-    if contains(gazepoint, aoi.inter):
-        return "INT"
-    elif contains(gazepoint, aoi.bor):
-        return "BOR"
-    elif aoi_ag and contains(gazepoint, aoi_ag):
-        return "ATT"
-    elif aoi.fam1 and contains(gazepoint, aoi.fam1):
-        return "FAM"
-    elif aoi.fam2 and contains(gazepoint, aoi.fam2):
-        return "FAM"
-    else:
-        return "OUT"
-
-
-def contains(gazepoint, AOI):
-    """ Checks if a pair of coordinates is within an AOI. """
-
-    if gazepoint == "invalid":
-        return False
-
-    gpx = gazepoint[0]
-    gpy = gazepoint[1]
-    aoix = AOI[0][0]
-    aoiy = AOI[0][1]
-    width = AOI[1]
-    height = AOI[2]
-
-    if ((aoix - width/2) <= gpx <= (aoix + width/2) and (aoiy - height/2) <= gpy <= (aoiy + height/2)):
-        return True
-    else:
-        return False
-
 
 ############
+# TODO
+def interpolate_gap_samples(df, freq=60, max_gap_length=101):
+    """
+    define a function for interpolating small periods that cut up fixations.
+    e.g. "FAM...", "OUT, OUT", "FAM..."
+    """
+    return df    
+
+
 def calculate_velocity(df):
     """
     Adds velocity column to dataframe.

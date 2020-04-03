@@ -17,7 +17,7 @@ date = str(datetime.datetime.today().date())
 dir_name = os.path.join(DIR, "tables", date)
 output_excel = os.path.join(dir_name, "curiosity_LT_aggregated_{0}.xlsx".format(date))
 
-def aggregate_data(ord_dict):
+def aggregate_data(ord_dict, timing):
     """
     Aggregates data from ord_dict
     ord_dict: dictionary with 
@@ -57,7 +57,7 @@ def aggregate_data(ord_dict):
                     .swifter.progress_bar(False).apply(_calculate_target_first_gaze, target="int", axis=1))
             .append(df_int.mean(axis=0, numeric_only=None)
                     .rename("mean"))
-            .swifter.progress_bar(False).applymap(_round_numbers)
+            .applymap(_round_numbers)
             )
     
     df_bor = (
@@ -66,11 +66,11 @@ def aggregate_data(ord_dict):
                     .swifter.progress_bar(False).apply(_calculate_target_first_gaze, target="bor", axis=1)))
             .append(df_bor.mean(axis=0, numeric_only=None)
                     .rename("mean"))
-            .swifter.progress_bar(False).applymap(_round_numbers)
+            .applymap(_round_numbers)
             )
     
-    df_int.to_excel(os.path.join(dir_name, "Familiar_label_trial_results_{0}.xlsx".format(date)))
-    df_bor.to_excel(os.path.join(dir_name, "Novel_label_trial_results_{0}.xlsx".format(date)))
+    df_int.to_excel(os.path.join(dir_name, f"Familiar_label_trial_results_{timing}_{date}.xlsx"))
+    df_bor.to_excel(os.path.join(dir_name, f"Novel_label_trial_results_{timing}_{date}.xlsx"))
     print("Aggregated data are saved to excel files.")
     
     

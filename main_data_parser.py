@@ -69,10 +69,12 @@ pd.options.mode.chained_assignment = None
 
 ####################
 test = False
-save_to_file = True
+save_to_file = False
 do_aggregation = False
-analyse_tc = False
-save_tc_pickle = False
+analyse_tc = True
+save_tc_pickle = True
+# test period. full time or up to start_time + 2000ms
+fulltime = True
 ####################
 
 logtime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
@@ -85,12 +87,13 @@ test_dir_name = os.path.join(c.DIR, "tables", "test_prints", date)
 tc_dfs_dir_name = os.path.join(c.DIR, "time_course", "subj_dataframes")
 pickle_jar = os.path.join(c.DIR, "time_course", "pickle")
 
+timing = "4sec_test" if fulltime else "2sec_test"
 if test:
     logfilespath = os.path.join(c.DIR, "data_to_read_TEST")
-    excelfile = os.path.join(test_dir_name, "curiosity_looking_data_TEST_{0}.xlsx".format(date))
+    excelfile = os.path.join(test_dir_name, f"curiosity_looking_data_TEST_{timing}_{date}.xlsx")
 else:
     logfilespath = os.path.join(c.DIR, "data_to_read")
-    excelfile = os.path.join(dir_name, "curiosity_looking_data_{0}.xlsx".format(date))
+    excelfile = os.path.join(dir_name, f"curiosity_looking_data_{timing}_{date}.xlsx")
     
 writer = pd.ExcelWriter(excelfile)
 
@@ -162,14 +165,14 @@ def main():
         print("Excel file with separate subject sheets is saved.")
     
     if do_aggregation:
-        aggr.aggregate_data(ord_dict)
+        aggr.aggregate_data(ord_dict, timing)
         
     if analyse_tc:
         time_course.analyse_time_course(time_course_dict)
     
     if save_tc_pickle:
         # save time_course_dict in a pickle
-        with open(os.path.join(pickle_jar, "tc_dict" + '.pkl'), 'wb') as f:
+        with open(os.path.join(pickle_jar, f"tc_dict_{timing}_{date}" + '.pkl'), 'wb') as f:
             pickle.dump(time_course_dict, f, pickle.HIGHEST_PROTOCOL)
             print("pickle file saved")
     
@@ -327,7 +330,12 @@ def parse_test_data(df, test, subj_nr):
                                                     end_time=test.ag_start_times[n])
         
         # LOOKING TIME
-        test_start, test_end = start_times[n]-339, end_times[n]
+        #period to check
+        if fulltime:
+            test_start, test_end = start_times[n]-339, end_times[n]
+        else:
+            test_start, test_end = start_times[n]-339, start_times[n]+2000
+#        test_start, test_end = start_times[n]-339, end_times[n]
         test_df = df[(df["TimeStamp"] >= test_start) & (df["TimeStamp"] <= test_end)]
         test_df = rt.assign_aoi_tags(test_df, aoi)
         test_all_gaze_coll = calc.collect_gaze(test_df)
@@ -355,13 +363,14 @@ def parse_test_data(df, test, subj_nr):
                   )
         test_dict[n] = td
         
-        # FIRST GAZE for gp: gaze period
-        gp_start, gp_end = start_times[n]-339, start_times[n]+2000
-        gp_df = df[(df["TimeStamp"] >= gp_start) & (df["TimeStamp"] <= gp_end)]
-        gp_df = rt.assign_aoi_tags(gp_df, aoi)
+        # FIRST GAZE
+#        gp_start, gp_end = start_times[n]-339, start_times[n]+2000
+#        gp_df = df[(df["TimeStamp"] >= test_start) & (df["TimeStamp"] <= test_end)]
+#        gp_df = rt.assign_aoi_tags(gp_df, aoi)
         
-        gaze_structure = calc.collect_gaze(gp_df)
-        gaze_d, responded = gaze_structure.sort_gaze(nr_of_gazes=3, start_time=gp_start)
+#        gaze_structure = calc.collect_gaze(gp_df)
+#        gaze_d, responded = gaze_structure.sort_gaze(nr_of_gazes=3, start_time=test_start)
+        gaze_d, responded = test_all_gaze_coll.sort_gaze(nr_of_gazes=3, start_time=test_start)
         label = ["Familiar","Novel"][n%2]
         gaze_dict[label]=gaze_d
         
@@ -371,8 +380,8 @@ def parse_test_data(df, test, subj_nr):
                        BL_INT = bl_onint, 
                        BL_BOR = bl_onboring,
                        BL_FAM = bl_onfam,
-                       AOI = gp_df["aoi"].tolist() #reset_index(drop=True)
-#                       AOI = test_df["aoi"].reset_index(drop=True) 
+#                       AOI = gp_df["aoi"].tolist() 
+                       AOI = test_df["aoi"].tolist()
                      )
             
             time_course_d[n] = tcd

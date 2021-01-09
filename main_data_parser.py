@@ -1,55 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Parsing eyetracker data of Curiosity Exp V5
-
-TODO: define a velocity threshold to categorise between saccades and fixations.
-Then from the distribution of fixations, decide the fixation duration threshold.
-Total looking times and first looks should all be fixations.
-
-Data processing structure:
-    - read (reading_and_transformations.read_tsv_file)
-        - read tsv file (with format checking), load to dataframe
-        - create "gazepoints" column from "GazePointX" and "GazePointY" ("invalid", if no data)
-    - transformations:
-        - restructuring data: remove event rows from df. (rt.detach_events)
-        - set new, successive indices (rt.interpolate_missing_samples)
-        - interpolation of not justified gaps (gaps < 101 ms) (rt.interpolate_missing_samples)
-
-    ((- calculate velocity for each sample; add velocity column
-    - classify fixations)) - to be implemented
-
-    - parse_introduction_data
-        - calculate onscreen fixation sum for presentation and labeling _calculate_onscreen_look)
-
-    - parse_familiarisation_data
-        - calculate onscreen fixation sum for presentation and labeling (_calculate_onscreen_look)
-        - calculate fixation sum for each interesting object (calculations.collect_gaze,
-          gaze.calculate_onobject_gaze)
-
-    - parse_test_data
-        - calculate onscreen fixation sum for baseline and test periods (_calculate_onscreen_look)
-
-        For each test round:
-            - calculate baseline fixation sums for each object (calculations.collect_gaze,
-              gaze.calculate_onobject_gaze)
-            - check ag fixation (calculations.collect_gaze)
-            - check trial validity based on above results
-            - collect test looking time data (baselines, onobject gazes, bl-corrected onobject gazes)
-            - calculate gaze structure
-            - collect gaze data from gaze structure (gaze.sort_gaze)
-            - collect time course data (baselines and AOI tags from gaze period)
-   
-###############################################################################         
-Change logs:
-------------
-2020.02.24
-- only apple and banana (from 02.24)
-- slightly changed loglines (see constants)
-
-2020.02.26
-3 rounds of familiarisation instead of 4
-1s blank before each test trial (instead of .5)
-"""
 
 import datetime
 import os
@@ -69,12 +18,12 @@ pd.options.mode.chained_assignment = None
 
 ####################
 test = False
-save_to_file = False
-do_aggregation = False
-analyse_tc = True
+save_to_file = True
+do_aggregation = True
+analyse_tc = False
 save_tc_pickle = True
 # test period. full time or up to start_time + 2000ms
-fulltime = True
+fulltime = False
 ####################
 
 logtime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
@@ -94,7 +43,7 @@ if test:
 else:
     logfilespath = os.path.join(c.DIR, "data_to_read")
     excelfile = os.path.join(dir_name, f"curiosity_looking_data_{timing}_{date}.xlsx")
-    
+
 writer = pd.ExcelWriter(excelfile)
 
 
@@ -104,17 +53,17 @@ AOI = collections.namedtuple("AOI", "inter, bor, fam1, fam2")
 
 
 def main():
-    
-    _create_paths([dir_name, test_dir_name, pickle_jar])
-    
+
+    _make_directories([dir_name, test_dir_name, pickle_jar])
+
     ord_dict = {}
     time_course_dict = {}
 
     logfiles = [f for f in sorted(os.listdir(logfilespath)) if os.path.isfile(os.path.join(logfilespath, f))]
-    
+
     for log in logfiles:
         print(f"\nReading file {log}")
-        
+
         # check date of logfile
         datestring = log.split("_")[3]
         logdate = datetime.datetime.strptime(datestring, "%Y-%m-%d")
@@ -134,11 +83,11 @@ def main():
         events = df_events["Event"].tolist()
 
         # if exp was not completed, don't bother
-        if not check_if_completed(events, subj_nr): 
+        if not check_if_completed(events, subj_nr):
             break
 
         df = rt.interpolate_missing_samples(df)
-        
+
         # objects holding logged times and events
         fam = c.Fam_data(df_events)
         teaching = c.Teaching_data(df_events, oldlog)
@@ -147,9 +96,9 @@ def main():
         valid1 = parse_introduction_data(df, fam, subj_nr)
         valid2 = parse_familiarisation_data(df, teaching, subj_nr)
         test_results_df, gaze_results_df, time_course_d = parse_test_data(df, test, subj_nr)
-        
+
         if valid1 and valid2:
-            
+
             # add time_course dict to main dict to send
             time_course_dict[subj_nr] = time_course_d
             # reset index of gaze_df from labels to default
@@ -158,25 +107,25 @@ def main():
             gaze_results_df.columns = [" ".join(col) for col in gaze_results_df.columns.to_flat_index()]
             # add dfs to main dict
             ord_dict[subj_nr] = [test_results_df, gaze_results_df]
-                    
-            
+
+
     if save_to_file:
         writer.save()
         print("Excel file with separate subject sheets is saved.")
-    
+
     if do_aggregation:
         aggr.aggregate_data(ord_dict, timing)
-        
+
     if analyse_tc:
         time_course.analyse_time_course(time_course_dict)
-    
+
     if save_tc_pickle:
         # save time_course_dict in a pickle
         with open(os.path.join(pickle_jar, f"tc_dict_{timing}_{date}" + '.pkl'), 'wb') as f:
             pickle.dump(time_course_dict, f, pickle.HIGHEST_PROTOCOL)
             print("pickle file saved")
-    
-    
+
+
 
 def parse_introduction_data(df, fam, subj_nr):
 
@@ -184,24 +133,24 @@ def parse_introduction_data(df, fam, subj_nr):
     fam_label_onscreen = _calculate_onscreen_look(df, fam.label_start_times, fam.label_end_times)
 
     output_fam = pd.DataFrame({"Fam_objs_LT-screen": fam_onscreen,"Fam_labeling_LT-screen":fam_label_onscreen})
-    
+
     if save_to_file:
         write_results_to_file(output_fam, subj_nr, index=False, startrow=0)
-    
+
     if (
-        (sum(fam_onscreen)/len(fam_onscreen) < 0.6) or 
+        (sum(fam_onscreen)/len(fam_onscreen) < 0.6) or
         (sum(fam_label_onscreen)/len(fam_label_onscreen) < 0.6)
         ):
         print(f"{subj_nr} not enough intro (or intro label) onscreen")
         return False
-    
+
     return True
 
 
 def parse_familiarisation_data(df, teaching, subj_nr):
 
     start_times, end_times = teaching.start_times, teaching.end_times
-    
+
     teaching_demo_onscreen = _calculate_onscreen_look(df, start_times, end_times)
     teaching_label_onscreen = _calculate_onscreen_look(df, teaching.label_start_times, teaching.label_end_times)
 
@@ -225,17 +174,17 @@ def parse_familiarisation_data(df, teaching, subj_nr):
 
     output_new = pd.DataFrame({"New_objs_LT-screen": teaching_demo_onscreen, "New_objs_LT-interesting": teaching_onint,
                                 "New_labeling_LT-screen": teaching_label_onscreen})
-    
+
     if save_to_file:
         write_results_to_file(output_new, subj_nr, index=False, startrow=7)
-    
+
     if (
         (sum(teaching_demo_onscreen)/len(teaching_demo_onscreen) < 0.6) or
         (sum(teaching_label_onscreen)/len(teaching_label_onscreen) < 0.6)
         ):
         print(f"{subj_nr} not enough teaching (or teaching label) onscreen")
         return False
-    
+
     return True
 
 
@@ -270,22 +219,22 @@ def parse_test_data(df, test, subj_nr):
     """
     returns:
         test_results_df from test_dict:
-            
+
         gaze_results_df from gaze_dict:
             dict to collect gaze structure data
                  keys: "familiar", "novel"
                  values: sorted gaze structure dictionary
-                     
+
         time_course_d:
             dict to collect data for time course analysis
-                keys: 
+                keys:
                      level 0: 0,1...
                      level 1: BL_INT, BL_BOR, aoi
     """
     test_dict = {}
-    
+
     gaze_dict = {}
-    
+
     time_course_d = {}
 
     start_times, end_times = test.start_times, test.end_times
@@ -299,13 +248,13 @@ def parse_test_data(df, test, subj_nr):
     # onscreen results
     bl_onscreen = _calculate_onscreen_look(df, test.bl_start_times, test.ag_start_times)
     test_onscreen = _calculate_onscreen_look(df, start_times, end_times)
-    
-    
+
+
     for n in range(len(end_times)): # n: trial nr
-        
+
         # trial validity
         valid = True
-        
+
         # AOIs in round n
         int_side = test_interesting_sides[n]
         aoi = AOI(inter=c.AOI_dict[int_side][0],
@@ -315,36 +264,35 @@ def parse_test_data(df, test, subj_nr):
 
         # check att getter fixation
         gazed_at_ag = check_att_getter_gaze(df, test, n, aoi)
-        
+
         # check validity
-        if ( 
+        if (
                 (not gazed_at_ag) or
-                (bl_onscreen[n] < 0.6) or 
-                (test_onscreen[n] < 0.6) 
+                (bl_onscreen[n] < 0.6) or
+                (test_onscreen[n] < 0.6)
             ):
             valid = False
-        
+
         # parse baseline in round
         bl_onint, bl_onboring, bl_onfam, = parse_baseline_data(df, aoi,
                                                     start_time=test.bl_start_times[n],
                                                     end_time=test.ag_start_times[n])
-        
+
         # LOOKING TIME
         #period to check
         if fulltime:
             test_start, test_end = start_times[n]-339, end_times[n]
         else:
             test_start, test_end = start_times[n]-339, start_times[n]+2000
-#        test_start, test_end = start_times[n]-339, end_times[n]
         test_df = df[(df["TimeStamp"] >= test_start) & (df["TimeStamp"] <= test_end)]
         test_df = rt.assign_aoi_tags(test_df, aoi)
         test_all_gaze_coll = calc.collect_gaze(test_df)
 
         test_onint_gaze, test_onboring_gaze, test_onfam_gaze = test_all_gaze_coll.calculate_onobject_gaze()
-        
+
         valid_trial = valid
         test_label = "Familiar" if n%2==0 else "Novel"
-        
+
         # collect test data  - Is the trial valid if there was no gaze response?
         td = dict(Test_label = test_label,
                   Baseline_LT_screen = bl_onscreen[n],
@@ -362,41 +310,41 @@ def parse_test_data(df, test, subj_nr):
                   Valid_trial = valid_trial
                   )
         test_dict[n] = td
-        
+
         # FIRST GAZE
 #        gp_start, gp_end = start_times[n]-339, start_times[n]+2000
 #        gp_df = df[(df["TimeStamp"] >= test_start) & (df["TimeStamp"] <= test_end)]
 #        gp_df = rt.assign_aoi_tags(gp_df, aoi)
-        
+
 #        gaze_structure = calc.collect_gaze(gp_df)
 #        gaze_d, responded = gaze_structure.sort_gaze(nr_of_gazes=3, start_time=test_start)
         gaze_d, responded = test_all_gaze_coll.sort_gaze(nr_of_gazes=3, start_time=test_start)
         label = ["Familiar","Novel"][n%2]
         gaze_dict[label]=gaze_d
-        
+
         if valid: # only add if valid trial
-            
+
             tcd = dict(responded=responded,
-                       BL_INT = bl_onint, 
+                       BL_INT = bl_onint,
                        BL_BOR = bl_onboring,
                        BL_FAM = bl_onfam,
-#                       AOI = gp_df["aoi"].tolist() 
+#                       AOI = gp_df["aoi"].tolist()
                        AOI = test_df["aoi"].tolist()
                      )
-            
+
             time_course_d[n] = tcd
 
         # logging
 #        label = start_events[n].split("_")[-2]
 #        logging.info("Label for test round {0}: {1}".format(str(n+1), label))
-     
+
         test_results_df = pd.DataFrame(test_dict).T
         gaze_results_df = pd.DataFrame(gaze_dict).T
-    
+
     if save_to_file:
         write_results_to_file(test_results_df, subj_nr, index=False, startrow=15)
         write_results_to_file(gaze_results_df, subj_nr, index=True, startrow=21)
-    
+
     return test_results_df, gaze_results_df, time_course_d
 
 
@@ -437,20 +385,20 @@ def write_results_to_file(df, subj_nr, index=False, startrow=15):
     """
     Writes input df to file excel file.
     """
-    
+
     def round_numbers(x):
 
         if isinstance(x, (float, complex)):
             return round(float(x),3)
         else:
             return x
-    
+
     # rounding
     df = df.applymap(round_numbers)
     df.to_excel(writer, sheet_name=subj_nr, index=index, startrow=startrow)
 
 
-    
+
 ## for testing
 def print_dataframes(df, subj_nr, filename):
 
@@ -461,29 +409,17 @@ def print_dataframes(df, subj_nr, filename):
     df.to_excel(writer, sheet_name=subj_nr)
     writer.save()
 
-    
-def _create_paths(paths):
-    
+
+def _make_directories(paths):
+
     for path in paths:
-        try: 
+        try:
             os.makedirs(path)
-        except FileExistsError: 
+        except FileExistsError:
             pass
 
 
 if __name__ == "__main__":
     main()
 
-
-###########################
-
-
-# TODO
-def calculate_fixations(df, start_time, end_time, threshold=151, freq=60):
-    """
-    Calculate fixations on target object within the specified period.
-    Default threshold is 151 ms -> 9 samples in 60 fps (ST ms samples)
-    - adds fixation column to database with tag "fix" if timepoint is within a (on-target) fixation period.
-    """
-    return df
 

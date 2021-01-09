@@ -3,8 +3,8 @@
 
 
 from constants import ST # sample time
-        
-        
+
+
 def collect_gaze(df,  collect_init_look=True, threshold=134):
     """
     Collects gaze data from dataframe.
@@ -13,16 +13,16 @@ def collect_gaze(df,  collect_init_look=True, threshold=134):
         df: the relevant slice (=gaze period) of the subject dataframe
         threshold: minimum nr of frames/datapoints of a gaze
     --------------
-    definitions: 
+    definitions:
         'gaze': continuous look on one of the objects for a period larger then a given threshold
-        label onset: label stop closure onset; for both label: after 2100ms of AG start, 
+        label onset: label stop closure onset; for both label: after 2100ms of AG start,
         label offset time: 'tacok': 2680ms; 'bitye': 2620 ms. mean: 2650ms. -> label dur: 550ms
             but ATT is still there until 160x16.7= 2672ms. So label offset time will be: 2672
         min. latency: 233ms (minimum time to initiate a saccade in response to a peripheral target)
-        response latency period: from 233ms to around 2233ms from target label  
+        response latency period: from 233ms to around 2233ms from target label
             (eyemovement duration is not included)
             -> from end of AG: 2672-2333= -339ms to + ~2000ms
-            -> fixation started outside of response latency period isn't a first look. 
+            -> fixation started outside of response latency period isn't a first look.
     --------------
     variables:
         gaze_list: list of lists of successive gazepoints ('hits') within the same aoi,
@@ -69,7 +69,7 @@ def collect_gaze(df,  collect_init_look=True, threshold=134):
                 gaze_list.append(hits[:])
             hits[:] = []
 
-    # tag_time_dur_dict: {rank:[tag, time, duration (lenght)]}
+    # -> tag_time_dur_dict: {rank:[tag, time, duration (lenght)]}
     tag_time_dur_dict = {i+1:[gaze[-1], gaze[0], len(gaze[1:])] for i,gaze in enumerate(gaze_list)}
 
     gaze_coll = GazeCollection(tag_time_dur_dict)
@@ -103,13 +103,13 @@ class GazeCollection:
         start of period: att gett start
         end of period: end of initial gaze (> 2672)
         start time should be above 2333ms (onset:2100, min. time needed to initialise gaze shift: 233)
-        
+
         """
 
         gaze_nr = list(self._dict.keys())[-1]
         gaze_data = self._dict[gaze_nr]
         latency = gaze_data[1]
-        
+
         return gaze_data[0], latency, gaze_data[2]
 
 
@@ -144,29 +144,29 @@ class GazeCollection:
         outer_keys = l[:nr_of_gazes]
         inner_keys = ["object","latency","duration"]
         d = {(outer, inner):None for outer in outer_keys for inner in inner_keys}
-        
+
         keys = outer_keys[1:]
-            
+
         responded=True
         # check if there is gaze at all + get first latency
         tag, latency, duration = self.get_gaze_data(gaze_nr=1, start_time=start_time)
         if (not latency):
             responded=False
             return d, responded
-        
+
         used_keys = keys # "Initial gaze" not filled
         # check if first gaze is initial gaze
         if latency < 33:
             print("Has initial gaze.")
             used_keys = outer_keys # to shift data
-            
+
         for i, k in enumerate(used_keys):
             tag, latency, duration = self.get_gaze_data(gaze_nr=i+1, start_time=start_time)
             d[(k,"object")]=tag
             d[(k,"latency")]=latency
             d[(k,"duration")]=duration * ST if duration else None
-            
-        return d, responded        
+
+        return d, responded
 
 
     def calculate_onobject_gaze(self):

@@ -35,7 +35,6 @@ Use scipy's stats to calculate the critical t-value internally
 
 
 import numpy as np
-import pandas as pd
 from scipy import stats
 
 
@@ -58,19 +57,15 @@ def t_test_1sample(X):
     n = len(X)
 
     if n == 1:
-        print(f"t-score: 0; n = 1; p = nan")
+        print("t-score: 0; n = 1; p = nan")
         return np.nan
 
     var = calculate_variance(n, X)
-#    print(f"X:{X}, \nvar of X: {var}")
-    # print("var of X:", var)
 
     t = np.mean(X) / (np.sqrt(var/n))
 
     df = n-1
     p = ( 1 - stats.t.cdf(np.abs(t), df=df) ) *2
-#    print(f"t-score: {t}")
-    # print("t-score:", t, ", p-value:", p)
 
     return p
 
@@ -91,18 +86,12 @@ def t_test_2samples(X, Y, n):
     p : p_value
     """
 
-    # print("X series:\n", X)
-    # print("n:", n)
-
     X = np.array(X)
     X = X[~np.isnan(X)]
     Y = np.array(Y)
     Y = Y[~np.isnan(Y)]
     var_x = calculate_variance(n,X)
     var_y = calculate_variance(n,Y)
-    # print("X array: ", X)
-    # print("var of X:", var_x)
-    # print("var of Y:", var_y)
 
     # df = 2*n -2
 
@@ -125,7 +114,6 @@ def t_test_2samples(X, Y, n):
 def calculate_variance(n, X):
 
     var = np.sum( (X - np.mean(X))**2 ) / (n-1)
-    # print("var: ", var)
 
     # sd = np.sqrt(var)
 
